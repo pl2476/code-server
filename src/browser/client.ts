@@ -5,11 +5,11 @@ import { Extensions, IConfigurationRegistry } from "vs/platform/configuration/co
 import { registerSingleton } from "vs/platform/instantiation/common/extensions";
 import { ServiceCollection } from "vs/platform/instantiation/common/serviceCollection";
 import { ILocalizationsService } from "vs/platform/localizations/common/localizations";
+import { INotificationService, Severity } from "vs/platform/notification/common/notification";
 import { Registry } from "vs/platform/registry/common/platform";
 import { PersistentConnectionEventType } from "vs/platform/remote/common/remoteAgentConnection";
 import { ITelemetryService } from "vs/platform/telemetry/common/telemetry";
 import { coderApi, vscodeApi } from "vs/server/src/browser/api";
-import { IUploadService, UploadService } from "vs/server/src/browser/upload";
 import { INodeProxyService, NodeProxyChannelClient } from "vs/server/src/common/nodeProxy";
 import { TelemetryChannelClient } from "vs/server/src/common/telemetry";
 import { split } from "vs/server/src/common/util";
@@ -70,7 +70,6 @@ class NodeProxyService extends NodeProxyChannelClient implements INodeProxyServi
 registerSingleton(ILocalizationsService, LocalizationsService);
 registerSingleton(INodeProxyService, NodeProxyService);
 registerSingleton(ITelemetryService, TelemetryService);
-registerSingleton(IUploadService, UploadService, true);
 
 /**
  * This is called by vs/workbench/browser/web.main.ts after the workbench has
@@ -85,6 +84,27 @@ export const initialize = async (services: ServiceCollection): Promise<void> => 
 	(event as any).ide = target.ide;
 	(event as any).vscode = target.vscode;
 	window.dispatchEvent(event);
+
+	if (!window.isSecureContext) {
+		(services.get(INotificationService) as INotificationService).notify({
+			severity: Severity.Warning,
+			message: "code-server is being accessed over an insecure domain. Some functionality may not work as expected.",
+			actions: {
+				primary: [{
+					id: "understand",
+					label: "I understand",
+					tooltip: "",
+					class: undefined,
+					enabled: true,
+					checked: true,
+					dispose: () => undefined,
+					run: () => {
+						return Promise.resolve();
+					}
+				}],
+			}
+		});
+	}
 };
 
 export interface Query {

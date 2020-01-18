@@ -1,78 +1,48 @@
-#!/bin/bash
+#!/usr/bin/env bash
+# ci.bash -- Build code-server in the CI.
+
 set -euo pipefail
 
-function docker-build() {
-	local target="${TARGET:-}"
-	local image="codercom/nbin-${target}"
-	local token="${GITHUB_TOKEN:-}"
-	local minify="${MINIFY:-}"
-	if [[ "${target}" == "linux" ]] ; then
-		image="codercom/nbin-centos"
-	fi
-
-	local containerId
-	# Use a mount so we can cache the results.
-	containerId=$(docker create --network=host --rm -it -v "$(pwd)":/src "${image}")
-	docker start "${containerId}"
-
-	# TODO: Might be better to move these dependencies to the images or create new
-	# ones on top of these.
-	if [[ "${image}" == "codercom/nbin-alpine" ]] ; then
-		docker exec "${containerId}" apk add libxkbfile-dev libsecret-dev
-	else
-		docker exec "${containerId}" yum install -y libxkbfile-devel libsecret-devel git
-	fi
-
-	function docker-exec() {
-		local command="${1}" ; shift
-		local args="'${vscodeVersion}' '${codeServerVersion}'"
-		docker exec "${containerId}" \
-			bash -c "cd /src && CI=true GITHUB_TOKEN=${token} MINIFY=${minify} yarn ${command} ${args}"
-	}
-
-	docker-exec build
-	if [[ -n "${package}" ]] ; then
-		docker-exec binary
-		docker-exec package
-	fi
-
-	docker kill "${containerId}"
-}
-
-function local-build() {
-	function local-exec() {
-		local command="${1}" ; shift
-		CI=true yarn "${command}" "${vscodeVersion}" "${codeServerVersion}"
-	}
-
-	local-exec build
-	if [[ -n "${package}" ]] ; then
-		local-exec binary
-		local-exec package
-	fi
-}
-
-# Build code-server in the CI.
 function main() {
 	cd "$(dirname "${0}")/.."
 
-	local codeServerVersion="${VERSION:-}"
-	local vscodeVersion="${VSCODE_VERSION:-}"
-	local ostype="${OSTYPE:-}"
-	local package="${PACKAGE:-}"
+	# Get the version information. If a specific version wasn't set, generate it
+	# from the tag and VS Code version.
+	local vscode_version=${VSCODE_VERSION:-1.41.1}
+	local code_server_version=${VERSION:-${TRAVIS_TAG:-${DRONE_TAG:-daily}}}
 
-	if [[ -z "${codeServerVersion}" ]] ; then
-		>&2 echo "Must set VERSION environment variable"; exit 1
+	# Remove everything that isn't the current VS Code source for caching
+	# (otherwise the cache will contain old versions).
+	if [[ -d "source/vscode-$vscode_version-source" ]] ; then
+		mv "source/vscode-$vscode_version-source" "vscode-$vscode_version-source"
+	fi
+	rm -rf source/vscode-*-source
+	if [[ -d "vscode-$vscode_version-source" ]] ; then
+		mv "vscode-$vscode_version-source" "source/vscode-$vscode_version-source"
 	fi
 
-	if [[ -z "${vscodeVersion}" ]] ; then
-		>&2 echo "Must set VSCODE_VERSION environment variable"; exit 1
+	YARN_CACHE_FOLDER="$(pwd)/yarn-cache"
+	export YARN_CACHE_FOLDER
+
+	# Always minify and package on tags since that's when releases are pushed.
+	if [[ -n ${DRONE_TAG:-} || -n ${TRAVIS_TAG:-} ]] ; then
+		export MINIFY="true"
+		export PACKAGE="true"
 	fi
 
-	if [[ "${ostype}" == "darwin"* ]]; then
-		local-build
-	else
-		docker-build
+	function run-yarn() {
+		yarn "$1" "$vscode_version" "$code_server_version"
+	}
+
+	run-yarn build
+	run-yarn binary
+	if [[ -n ${PACKAGE:-} ]] ; then
+		run-yarn package
+	fi
+
+	# In this case provide a plainly named "code-server" binary.
+	if [[ -n ${BINARY:-} ]] ; then
+		mv binaries/code-server*-vsc* binaries/code-server
 	fi
 }
 
