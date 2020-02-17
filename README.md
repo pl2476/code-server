@@ -6,7 +6,7 @@ remote server, accessible through the browser.
 Try it out:
 
 ```bash
-docker run -it -p 127.0.0.1:8080:8080 -v "${HOME}/.local/share/code-server:/home/coder/.local/share/code-server" -v "$PWD:/home/coder/project" codercom/code-server:v2
+docker run -it -p 127.0.0.1:8080:8080 -v "$PWD:/home/coder/project" codercom/code-server
 ```
 
 - **Consistent environment:** Code on your Chromebook, tablet, and laptop with a
@@ -65,7 +65,7 @@ before building.
 
 ```shell
 export OUT=/path/to/output/build                 # Optional if only building. Required if also developing.
-yarn build $vscodeVersion $codeServerVersion     # See travis.yml for the VS Code version to use.
+yarn build $vscodeVersion $codeServerVersion     # See scripts/ci.bash for the VS Code version to use.
                                                  # The code-server version can be anything you want.
 node /path/to/output/build/out/vs/server/main.js # You can run the built JavaScript with Node.
 yarn binary $vscodeVersion $codeServerVersion    # Or you can package it into a binary.
@@ -141,7 +141,7 @@ before developing.
 ```shell
 git clone https://github.com/microsoft/vscode
 cd vscode
-git checkout ${vscodeVersion} # See travis.yml for the version to use.
+git checkout ${vscodeVersion} # See scripts/ci.bash for the version to use.
 yarn
 git clone https://github.com/cdr/code-server src/vs/server
 cd src/vs/server
